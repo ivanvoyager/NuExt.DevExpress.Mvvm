@@ -7,29 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
     <PackageTags>nuext;devexpress;dxmvvm;dx;mvvm;wpf;xaml;ui;async</PackageTags>
-    <Description>Provides a suite of extensions and utilities for the DevExpress MVVM Framework with a focus on asynchronous operations.
-
-Commonly Used Types:
-DevExpress.Mvvm.Bindable
-DevExpress.Mvvm.ViewModel
-DevExpress.Mvvm.ControlViewModel
-DevExpress.Mvvm.DocumentContentViewModelBase
-DevExpress.Mvvm.WindowViewModel
-DevExpress.Mvvm.AsyncCommandManager
-DevExpress.Mvvm.IAsyncDialogService
-DevExpress.Mvvm.IAsyncDocument
-DevExpress.Mvvm.IAsyncDocumentManagerService
-DevExpress.Mvvm.UI.OpenWindowsService
-DevExpress.Mvvm.UI.SettingsService
-DevExpress.Mvvm.UI.TabbedDocumentUIService
-DevExpress.Mvvm.UI.WindowPlacementService</Description>
-    <Version>0.7.0</Version>
+    <Description>Provides extensions and utilities for the DevExpress MVVM Framework with a focus on asynchronous operations in WPF. Improves async workflow handling, enhances ViewModel infrastructure, and offers async‑aware services that simplify building responsive MVVM applications.</Description>
+    <Version>0.7.1</Version>
     <RootNamespace>DevExpress.Mvvm</RootNamespace>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591;NETSDK1233</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>logo128.png</PackageIcon>
-    <PackageProjectUrl>https://github.com/IvanGit/NuExt.DevExpress.Mvvm</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/ivanvoyager/NuExt.DevExpress.Mvvm</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,7 +26,7 @@ DevExpress.Mvvm.UI.WindowPlacementService</Description>
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseNuExtPackages)' == 'true'">
-    <PackageReference Include="NuExt.System" Version="0.7.0" />
+    <PackageReference Include="NuExt.System" Version="0.7.2" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseNuExtPackages)' == 'false'">
@@ -50,7 +35,7 @@ DevExpress.Mvvm.UI.WindowPlacementService</Description>
 
   <ItemGroup>
     <None Include="..\logo128.png" Pack="true" PackagePath="\" />
-    <None Include=".\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
