@@ -1,6 +1,5 @@
-﻿namespace DevExpress.Mvvm
+﻿namespace DevExpress.Mvvm;
+
+public class DefaultViewModelConfiguration: ViewModelConfiguration
 {
-    public class DefaultViewModelConfiguration: ViewModelConfiguration
-    {
-    }
 }

@@ -1,10 +1,9 @@
 ﻿using DevExpress.Mvvm;
 
-namespace MovieWpfApp.Interfaces.ViewModels
+namespace MovieWpfApp.Interfaces.ViewModels;
+
+public interface IMainWindowViewModel
 {
-    public interface IMainWindowViewModel
-    {
-        IAsyncCommand? CloseMovieCommand { get; }
-        IAsyncCommand? OpenMovieCommand { get; }
-    }
+    IAsyncCommand? CloseMovieCommand { get; }
+    IAsyncCommand? OpenMovieCommand { get; }
 }

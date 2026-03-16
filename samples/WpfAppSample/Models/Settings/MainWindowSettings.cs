@@ -1,19 +1,18 @@
 ﻿using DevExpress.Mvvm;
 
-namespace MovieWpfApp.Models
-{
-    public sealed class MainWindowSettings : BindableSettings
-    {
-        public bool MoviesOpened
-        {
-            get { return GetProperty(() => MoviesOpened); }
-            set { SetProperty(() => MoviesOpened, value); }
-        }
+namespace MovieWpfApp.Models;
 
-        protected override void OnInitialize()
-        {
-            base.OnInitialize();
-            MoviesOpened = true;
-        }
+public sealed class MainWindowSettings : BindableSettings
+{
+    public bool MoviesOpened
+    {
+        get { return GetProperty(() => MoviesOpened); }
+        set { SetProperty(() => MoviesOpened, value); }
+    }
+
+    protected override void OnInitialize()
+    {
+        base.OnInitialize();
+        MoviesOpened = true;
     }
 }

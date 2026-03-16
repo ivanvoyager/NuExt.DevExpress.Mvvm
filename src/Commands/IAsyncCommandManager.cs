@@ -1,11 +1,10 @@
-﻿namespace DevExpress.Mvvm
+﻿namespace DevExpress.Mvvm;
+
+public interface IAsyncCommandManager
 {
-    public interface IAsyncCommandManager
-    {
-        int Count { get; }
+    int Count { get; }
 
-        IAsyncCommand Register(IAsyncCommand command);
-        void Unregister(IAsyncCommand command);
+    IAsyncCommand Register(IAsyncCommand command);
+    void Unregister(IAsyncCommand command);
 
-    }
 }

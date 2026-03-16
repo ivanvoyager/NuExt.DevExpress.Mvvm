@@ -7,507 +7,506 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace DevExpress.Mvvm.UI
+namespace DevExpress.Mvvm.UI;
+
+/// <summary>
+/// The TabbedDocumentUIService class is responsible for managing tabbed documents within a UI. 
+/// It extends the DocumentUIServiceBase and implements interfaces for asynchronous document management and disposal. 
+/// This service allows for the creation, binding, and lifecycle management of tabbed documents within controls such as TabControl, 
+/// UserControl, and Window.
+/// </summary>
+[TargetType(typeof(TabControl))]
+[TargetType(typeof(UserControl))]
+[TargetType(typeof(Window))]
+public sealed class TabbedDocumentUIService : DocumentUIServiceBase, IAsyncDocumentManagerService, IAsyncDisposable
 {
-    /// <summary>
-    /// The TabbedDocumentUIService class is responsible for managing tabbed documents within a UI. 
-    /// It extends the DocumentUIServiceBase and implements interfaces for asynchronous document management and disposal. 
-    /// This service allows for the creation, binding, and lifecycle management of tabbed documents within controls such as TabControl, 
-    /// UserControl, and Window.
-    /// </summary>
-    [TargetType(typeof(TabControl))]
-    [TargetType(typeof(UserControl))]
-    [TargetType(typeof(Window))]
-    public sealed class TabbedDocumentUIService : DocumentUIServiceBase, IAsyncDocumentManagerService, IAsyncDisposable
+    #region TabbedDocument
+
+    private class TabbedDocument : AsyncDisposable, IAsyncDocument, IDocumentInfo
     {
-        #region TabbedDocument
+        private readonly Lifetime _lifetime = new();
+        private bool _isClosing;
 
-        private class TabbedDocument : AsyncDisposable, IAsyncDocument, IDocumentInfo
+        public TabbedDocument(TabbedDocumentUIService owner, TabItem tab, string? documentType)
         {
-            private readonly Lifetime _lifetime = new();
-            private bool _isClosing;
+            _ = owner ?? throw new ArgumentNullException(nameof(owner));
+            Tab = tab ?? throw new ArgumentNullException(nameof(tab));
+            DocumentType = documentType;
+            State = DocumentState.Hidden;
 
-            public TabbedDocument(TabbedDocumentUIService owner, TabItem tab, string? documentType)
+            _lifetime.AddBracket(() => owner._documents.Add(this), () => owner._documents.Remove(this));
+            _lifetime.Add(() => TabControl?.Items.Remove(Tab));
+            _lifetime.Add(() => Tab.ClearStyle());
+            _lifetime.Add(DetachContent);
+            _lifetime.AddBracket(() => SetDocument(Tab, this), () => SetDocument(Tab, null));
+            _lifetime.AddBracket(
+                () => Tab.IsVisibleChanged += OnTabIsVisibleChanged,
+                () => Tab.IsVisibleChanged -= OnTabIsVisibleChanged);
+            _lifetime.AddBracket(
+                () => SetTitleBinding(Tab.Content, HeaderedContentControl.HeaderProperty, Tab, true),
+                () => ClearTitleBinding(HeaderedContentControl.HeaderProperty, Tab));
+
+            var dpd = DependencyPropertyDescriptor.FromProperty(HeaderedContentControl.HeaderProperty, typeof(HeaderedContentControl));
+            if (dpd != null)
             {
-                _ = owner ?? throw new ArgumentNullException(nameof(owner));
-                Tab = tab ?? throw new ArgumentNullException(nameof(tab));
-                DocumentType = documentType;
-                State = DocumentState.Hidden;
-
-                _lifetime.AddBracket(() => owner._documents.Add(this), () => owner._documents.Remove(this));
-                _lifetime.Add(() => TabControl?.Items.Remove(Tab));
-                _lifetime.Add(() => Tab.ClearStyle());
-                _lifetime.Add(DetachContent);
-                _lifetime.AddBracket(() => SetDocument(Tab, this), () => SetDocument(Tab, null));
                 _lifetime.AddBracket(
-                    () => Tab.IsVisibleChanged += OnTabIsVisibleChanged,
-                    () => Tab.IsVisibleChanged -= OnTabIsVisibleChanged);
-                _lifetime.AddBracket(
-                    () => SetTitleBinding(Tab.Content, HeaderedContentControl.HeaderProperty, Tab, true),
-                    () => ClearTitleBinding(HeaderedContentControl.HeaderProperty, Tab));
-
-                var dpd = DependencyPropertyDescriptor.FromProperty(HeaderedContentControl.HeaderProperty, typeof(HeaderedContentControl));
-                if (dpd != null)
-                {
-                    _lifetime.AddBracket(
-                        () => dpd.AddValueChanged(Tab, OnTabHeaderChanged),
-                        () => dpd.RemoveValueChanged(Tab, OnTabHeaderChanged));
-                }
-                Debug.Assert(dpd != null);
+                    () => dpd.AddValueChanged(Tab, OnTabHeaderChanged),
+                    () => dpd.RemoveValueChanged(Tab, OnTabHeaderChanged));
             }
-
-            #region Properties
-
-            public object Id { get; set; } = null!;
-
-            public object Content => ViewHelper.GetViewModelFromView(Tab.Content);
-
-            public object? Title
-            {
-                get => Tab?.Header;
-                set => Tab.Do(x => x.Header = Convert.ToString(value));
-            }
-
-            public bool DestroyOnClose { get; set; }
-
-            public DocumentState State { get; private set; }
-
-            public string? DocumentType { get; }
-
-            private TabItem Tab { get; set; }
-
-            private TabControl? TabControl => Tab.With(x => (x.Parent as TabControl)!);
-
-            #endregion
-
-            #region Event Handlers
-
-            private void OnTabHeaderChanged(object? sender, EventArgs e)
-            {
-                OnPropertyChanged(EventArgsCache.TitlePropertyChanged);
-            }
-
-            private void OnTabIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-            {
-                if (Tab.Content is UIElement element)
-                {
-                    element.Visibility = Tab.Visibility;
-                }
-            }
-
-            #endregion
-
-            #region Methods
-
-            public void Close(bool force = true)
-            {
-                Debug.Assert(false, $"Use {nameof(CloseAsync)} method instead.");
-                throw new NotSupportedException($"Use {nameof(CloseAsync)} method instead.");
-            }
-
-            public async ValueTask CloseAsync(bool force = true)
-            {
-                if (_isClosing || IsDisposing)
-                {
-                    return;
-                }
-                _isClosing = true;
-                try
-                {
-                    await CloseCoreAsync(force, DestroyOnClose);
-                }
-                finally
-                {
-                    _isClosing = false;
-                }
-            }
-
-            private async ValueTask CloseCoreAsync(bool force, bool dispose)
-            {
-                if (State == DocumentState.Destroyed)
-                {
-                    return;
-                }
-                if (!force)
-                {
-                    var cancelEventArgs = new CancelEventArgs();
-                    DocumentViewModelHelper.OnClose(Content, cancelEventArgs);
-                    if (cancelEventArgs.Cancel)
-                    {
-                        return;
-                    }
-                }
-                CloseTab();
-                State = DocumentState.Hidden;
-                if (dispose)
-                {
-                    await DisposeAsync().ConfigureAwait(false);
-                }
-            }
-
-            private void CloseTab()
-            {
-                Tab.Visibility = Visibility.Collapsed;
-            }
-
-            private void DetachContent()
-            {
-                var view = Tab.Content;
-                Debug.Assert(view != null);
-                //First, detach DataContext from view
-                view.With(x => x as FrameworkElement).Do(x => x!.DataContext = null);
-                view.With(x => x as FrameworkContentElement).Do(x => x!.DataContext = null);
-                view.With(x => x as ContentPresenter).Do(x => x!.Content = null);
-                //Second, detach Content from tab item
-                Debug.Assert(Tab != null);
-                Tab.Do(x => x!.Content = null);
-            }
-
-            protected override async ValueTask DisposeAsyncCore()
-            {
-                Debug.Assert(ContinueOnCapturedContext);
-
-                if (State == DocumentState.Destroyed)
-                {
-                    return;
-                }
-
-                var content = Content;
-                try
-                {
-                    Debug.Assert(content is IAsyncDisposable);
-                    if (content is IAsyncDisposable asyncDisposable)
-                    {
-                        await asyncDisposable.DisposeAsync();
-                    }
-                }
-                finally
-                {
-                    _lifetime.Dispose();
-                }
-                DocumentViewModelHelper.OnDestroy(content);
-                Tab = null!;
-                State = DocumentState.Destroyed;
-            }
-
-            public void Hide()
-            {
-                if (State == DocumentState.Visible)
-                {
-                    Tab.Visibility = Visibility.Collapsed;
-                    State = DocumentState.Hidden;
-                }
-            }
-
-            public void Show()
-            {
-                if (State == DocumentState.Hidden)
-                {
-                    Tab.Visibility = Visibility.Visible;
-                }
-                Tab.IsSelected = true;
-                State = DocumentState.Visible;
-            }
-
-            #endregion
+            Debug.Assert(dpd != null);
         }
-
-        #endregion
-
-        private readonly ObservableCollection<IAsyncDocument> _documents = [];
-        private bool _isInitialized;
-        private bool _isActiveDocumentChanging;
-        private IDisposable? _subscription;
-
-        #region Dependency Properties
-
-        public static readonly DependencyProperty ActiveDocumentProperty = DependencyProperty.Register(
-            nameof(ActiveDocument), typeof(IAsyncDocument), typeof(TabbedDocumentUIService),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, (d, e) => ((TabbedDocumentUIService)d).OnActiveDocumentChanged(e.OldValue as IAsyncDocument, e.NewValue as IAsyncDocument)));
-
-        public static readonly DependencyProperty CloseButtonEnabledProperty = DependencyProperty.Register(
-            nameof(CloseButtonEnabled), typeof(bool), typeof(TabbedDocumentUIService),
-            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsArrange | FrameworkPropertyMetadataOptions.AffectsMeasure));
-
-        public static readonly DependencyProperty TargetProperty = DependencyProperty.Register(
-            nameof(Target), typeof(TabControl), typeof(TabbedDocumentUIService),
-            new PropertyMetadata(null, (d, e) => ((TabbedDocumentUIService)d).OnTargetChanged((TabControl?)e.OldValue)));
-
-        public static readonly DependencyProperty UnresolvedViewTypeProperty = DependencyProperty.Register(
-            nameof(UnresolvedViewType), typeof(Type), typeof(TabbedDocumentUIService));
-
-        #endregion
-
-        public TabbedDocumentUIService()
-        {
-            if (ViewModelBase.IsInDesignMode) return;
-            (_documents as INotifyPropertyChanged).PropertyChanged += OnDocumentsPropertyChanged;
-        }
-
-        #region Events
-
-        public event ActiveDocumentChangedEventHandler? ActiveDocumentChanged;
-
-        #endregion
 
         #region Properties
 
-        public IAsyncDocument? ActiveDocument
+        public object Id { get; set; } = null!;
+
+        public object Content => ViewHelper.GetViewModelFromView(Tab.Content);
+
+        public object? Title
         {
-            get => (IAsyncDocument)GetValue(ActiveDocumentProperty);
-            set => SetValue(ActiveDocumentProperty, value);
+            get => Tab?.Header;
+            set => Tab.Do(x => x.Header = Convert.ToString(value));
         }
 
-        private TabControl? ActualTarget => Target ?? (AssociatedObject as TabControl);
+        public bool DestroyOnClose { get; set; }
 
-        public IEnumerable<IAsyncDocument> Documents => _documents;
+        public DocumentState State { get; private set; }
 
-        public bool CloseButtonEnabled
-        {
-            get => (bool)GetValue(CloseButtonEnabledProperty);
-            set => SetValue(CloseButtonEnabledProperty, value);
-        }
+        public string? DocumentType { get; }
 
-        public int Count => _documents.Count;
+        private TabItem Tab { get; set; }
 
-        private TabControl? Target
-        {
-            get => (TabControl)GetValue(TargetProperty);
-            set => SetValue(TargetProperty, value);
-        }
-
-        public Type? UnresolvedViewType
-        {
-            get => (Type)GetValue(UnresolvedViewTypeProperty);
-            set => SetValue(UnresolvedViewTypeProperty, value);
-        }
+        private TabControl? TabControl => Tab.With(x => (x.Parent as TabControl)!);
 
         #endregion
 
         #region Event Handlers
 
-        private void OnActiveDocumentChanged(IAsyncDocument? oldValue, IAsyncDocument? newValue)
+        private void OnTabHeaderChanged(object? sender, EventArgs e)
         {
-            if (!_isActiveDocumentChanging)
-            {
-                _isActiveDocumentChanging = true;
-                try
-                {
-                    newValue?.Show();
-                }
-                finally
-                {
-                    _isActiveDocumentChanging = false;
-                }
-            }
-            ActiveDocumentChanged?.Invoke(this, new ActiveDocumentChangedEventArgs(oldValue, newValue));
+            OnPropertyChanged(EventArgsCache.TitlePropertyChanged);
         }
 
-        private void OnDocumentsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        private void OnTabIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(_documents.Count))
+            if (Tab.Content is UIElement element)
             {
-                RaisePropertyChanged(nameof(Count));
+                element.Visibility = Tab.Visibility;
             }
-        }
-
-        private static async void OnTabControlItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            switch (e.Action)
-            {
-                case NotifyCollectionChangedAction.Add:
-                case NotifyCollectionChangedAction.Remove:
-                    if (e.OldItems is { Count: > 0 })
-                    {
-                        foreach (var item in e.OldItems)
-                        {
-                            if (item is not TabItem tab)
-                            {
-                                continue;
-                            }
-                            if (GetDocument(tab) is IAsyncDocument document)
-                            {
-                                await document.CloseAsync(force: true);
-                            }
-                        }
-                    }
-                    break;
-            }
-        }
-
-        private void OnTabControlLoaded(object sender, RoutedEventArgs e)
-        {
-            Debug.Assert(Equals(sender, ActualTarget));
-            if (sender is FrameworkElement fe)
-            {
-                fe.Loaded -= OnTabControlLoaded;
-            }
-            Initialize();
-        }
-
-        private void OnTabControlSelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_isActiveDocumentChanging)
-            {
-                return;
-            }
-            TabControl tabControl = (TabControl)sender;
-            if (ActualTarget == tabControl)
-            {
-                _isActiveDocumentChanging = true;
-                try
-                {
-                    ActiveDocument = (tabControl.SelectedItem is TabItem tabItem) ? (IAsyncDocument)GetDocument(tabItem) : null;
-                }
-                finally
-                {
-                    _isActiveDocumentChanging = false;
-                }
-            }
-        }
-
-        private void OnTargetChanged(TabControl? oldValue)
-        {
-            Debug.Assert(oldValue == null);
-            Initialize();
         }
 
         #endregion
 
         #region Methods
 
-        public IAsyncDocument CreateDocument(string? documentType, object? viewModel, object? parameter, object? parentViewModel)
+        public void Close(bool force = true)
         {
-            ArgumentNullException.ThrowIfNull(ActualTarget);
-
-            object? view;
-            if (documentType == null && ViewTemplate == null && ViewTemplateSelector == null)
-            {
-                view = GetUnresolvedViewType() ?? (ViewLocator ?? UI.ViewLocator.Default).ResolveView(documentType);
-                ViewHelper.InitializeView(view, viewModel, parameter, parentViewModel);
-            }
-            else
-            {
-                view = CreateAndInitializeView(documentType, viewModel, parameter, parentViewModel);
-            }
-            var tab = new TabItem
-            {
-                Header = "Item",
-                Content = view,
-            };
-            ActualTarget?.Items.Add(tab);
-            var document = new TabbedDocument(this, tab, documentType) { ContinueOnCapturedContext = true };
-            return document;
+            Debug.Assert(false, $"Use {nameof(CloseAsync)} method instead.");
+            throw new NotSupportedException($"Use {nameof(CloseAsync)} method instead.");
         }
 
-        public async ValueTask DisposeAsync()
+        public async ValueTask CloseAsync(bool force = true)
         {
+            if (_isClosing || IsDisposing)
+            {
+                return;
+            }
+            _isClosing = true;
             try
             {
-                if (_documents.Count == 0)
+                await CloseCoreAsync(force, DestroyOnClose);
+            }
+            finally
+            {
+                _isClosing = false;
+            }
+        }
+
+        private async ValueTask CloseCoreAsync(bool force, bool dispose)
+        {
+            if (State == DocumentState.Destroyed)
+            {
+                return;
+            }
+            if (!force)
+            {
+                var cancelEventArgs = new CancelEventArgs();
+                DocumentViewModelHelper.OnClose(Content, cancelEventArgs);
+                if (cancelEventArgs.Cancel)
                 {
                     return;
                 }
-                await Task.WhenAll(_documents.ToList().Select(x => x.CloseAsync().AsTask()));
-                if (_documents.Count == 0)
-                {
-                    return;
-                }
+            }
+            CloseTab();
+            State = DocumentState.Hidden;
+            if (dispose)
+            {
+                await DisposeAsync().ConfigureAwait(false);
+            }
+        }
 
-                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private void CloseTab()
+        {
+            Tab.Visibility = Visibility.Collapsed;
+        }
 
-                void OnDocumentsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-                {
-                    if (_documents.Count == 0)
-                    {
-                        tcs.TrySetResult(true);
-                    }
-                }
+        private void DetachContent()
+        {
+            var view = Tab.Content;
+            Debug.Assert(view != null);
+            //First, detach DataContext from view
+            view.With(x => x as FrameworkElement).Do(x => x!.DataContext = null);
+            view.With(x => x as FrameworkContentElement).Do(x => x!.DataContext = null);
+            view.With(x => x as ContentPresenter).Do(x => x!.Content = null);
+            //Second, detach Content from tab item
+            Debug.Assert(Tab != null);
+            Tab.Do(x => x!.Content = null);
+        }
 
-                _documents.CollectionChanged += OnDocumentsCollectionChanged;
-                try
+        protected override async ValueTask DisposeAsyncCore()
+        {
+            Debug.Assert(ContinueOnCapturedContext);
+
+            if (State == DocumentState.Destroyed)
+            {
+                return;
+            }
+
+            var content = Content;
+            try
+            {
+                Debug.Assert(content is IAsyncDisposable);
+                if (content is IAsyncDisposable asyncDisposable)
                 {
-                    if (_documents.Count == 0)
-                    {
-                        tcs.TrySetResult(true);
-                    }
-                    await tcs.Task.ConfigureAwait(false);
-                }
-                finally
-                {
-                    _documents.CollectionChanged -= OnDocumentsCollectionChanged;
+                    await asyncDisposable.DisposeAsync();
                 }
             }
             finally
             {
-                (_documents as INotifyPropertyChanged).PropertyChanged -= OnDocumentsPropertyChanged;
+                _lifetime.Dispose();
             }
+            DocumentViewModelHelper.OnDestroy(content);
+            Tab = null!;
+            State = DocumentState.Destroyed;
         }
 
-        private object? GetUnresolvedViewType()
+        public void Hide()
         {
-            return UnresolvedViewType == null ? null : Activator.CreateInstance(UnresolvedViewType);
-        }
-
-        private void Initialize()
-        {
-            _isInitialized = true;
-            Disposable.DisposeAndNull(ref _subscription);
-            _subscription = SubscribeTabControl(ActualTarget);
-        }
-
-        protected override void OnAttached()
-        {
-            base.OnAttached();
-            Debug.Assert(_subscription == null);
-            if (!_isInitialized)
+            if (State == DocumentState.Visible)
             {
-                if (AssociatedObject.IsLoaded)
-                {
-                    Initialize();
-                }
-                else
-                {
-                    AssociatedObject.Loaded += OnTabControlLoaded;
-                }
+                Tab.Visibility = Visibility.Collapsed;
+                State = DocumentState.Hidden;
             }
         }
 
-        protected override void OnDetaching()
+        public void Show()
         {
-            _isInitialized = false;
-            AssociatedObject.Loaded -= OnTabControlLoaded;
-            Debug.Assert(_subscription != null);
-            Disposable.DisposeAndNull(ref _subscription);
-            base.OnDetaching();
-        }
-
-        private Lifetime? SubscribeTabControl(TabControl? tabControl)
-        {
-            if (tabControl == null)
+            if (State == DocumentState.Hidden)
             {
-                return null;
+                Tab.Visibility = Visibility.Visible;
             }
-            if (tabControl.ItemsSource != null)
-            {
-                Throw.InvalidOperationException("Can't use not null ItemsSource in this service.");
-            }
-            var lifetime = new Lifetime();
-            if (tabControl.Items is INotifyCollectionChanged collection)
-            {
-                lifetime.AddBracket(() => collection.CollectionChanged += OnTabControlItemsCollectionChanged,
-                    () => collection.CollectionChanged -= OnTabControlItemsCollectionChanged);
-            }
-            lifetime.AddBracket(() => tabControl.SelectionChanged += OnTabControlSelectionChanged,
-                () => tabControl.SelectionChanged -= OnTabControlSelectionChanged);
-            return lifetime;
+            Tab.IsSelected = true;
+            State = DocumentState.Visible;
         }
 
         #endregion
     }
 
-    internal static partial class EventArgsCache
+    #endregion
+
+    private readonly ObservableCollection<IAsyncDocument> _documents = [];
+    private bool _isInitialized;
+    private bool _isActiveDocumentChanging;
+    private IDisposable? _subscription;
+
+    #region Dependency Properties
+
+    public static readonly DependencyProperty ActiveDocumentProperty = DependencyProperty.Register(
+        nameof(ActiveDocument), typeof(IAsyncDocument), typeof(TabbedDocumentUIService),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, (d, e) => ((TabbedDocumentUIService)d).OnActiveDocumentChanged(e.OldValue as IAsyncDocument, e.NewValue as IAsyncDocument)));
+
+    public static readonly DependencyProperty CloseButtonEnabledProperty = DependencyProperty.Register(
+        nameof(CloseButtonEnabled), typeof(bool), typeof(TabbedDocumentUIService),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsArrange | FrameworkPropertyMetadataOptions.AffectsMeasure));
+
+    public static readonly DependencyProperty TargetProperty = DependencyProperty.Register(
+        nameof(Target), typeof(TabControl), typeof(TabbedDocumentUIService),
+        new PropertyMetadata(null, (d, e) => ((TabbedDocumentUIService)d).OnTargetChanged((TabControl?)e.OldValue)));
+
+    public static readonly DependencyProperty UnresolvedViewTypeProperty = DependencyProperty.Register(
+        nameof(UnresolvedViewType), typeof(Type), typeof(TabbedDocumentUIService));
+
+    #endregion
+
+    public TabbedDocumentUIService()
     {
-        internal static readonly PropertyChangedEventArgs TitlePropertyChanged = new(nameof(IAsyncDocument.Title));
+        if (ViewModelBase.IsInDesignMode) return;
+        (_documents as INotifyPropertyChanged).PropertyChanged += OnDocumentsPropertyChanged;
     }
+
+    #region Events
+
+    public event ActiveDocumentChangedEventHandler? ActiveDocumentChanged;
+
+    #endregion
+
+    #region Properties
+
+    public IAsyncDocument? ActiveDocument
+    {
+        get => (IAsyncDocument)GetValue(ActiveDocumentProperty);
+        set => SetValue(ActiveDocumentProperty, value);
+    }
+
+    private TabControl? ActualTarget => Target ?? (AssociatedObject as TabControl);
+
+    public IEnumerable<IAsyncDocument> Documents => _documents;
+
+    public bool CloseButtonEnabled
+    {
+        get => (bool)GetValue(CloseButtonEnabledProperty);
+        set => SetValue(CloseButtonEnabledProperty, value);
+    }
+
+    public int Count => _documents.Count;
+
+    private TabControl? Target
+    {
+        get => (TabControl)GetValue(TargetProperty);
+        set => SetValue(TargetProperty, value);
+    }
+
+    public Type? UnresolvedViewType
+    {
+        get => (Type)GetValue(UnresolvedViewTypeProperty);
+        set => SetValue(UnresolvedViewTypeProperty, value);
+    }
+
+    #endregion
+
+    #region Event Handlers
+
+    private void OnActiveDocumentChanged(IAsyncDocument? oldValue, IAsyncDocument? newValue)
+    {
+        if (!_isActiveDocumentChanging)
+        {
+            _isActiveDocumentChanging = true;
+            try
+            {
+                newValue?.Show();
+            }
+            finally
+            {
+                _isActiveDocumentChanging = false;
+            }
+        }
+        ActiveDocumentChanged?.Invoke(this, new ActiveDocumentChangedEventArgs(oldValue, newValue));
+    }
+
+    private void OnDocumentsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(_documents.Count))
+        {
+            RaisePropertyChanged(nameof(Count));
+        }
+    }
+
+    private static async void OnTabControlItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add:
+            case NotifyCollectionChangedAction.Remove:
+                if (e.OldItems is { Count: > 0 })
+                {
+                    foreach (var item in e.OldItems)
+                    {
+                        if (item is not TabItem tab)
+                        {
+                            continue;
+                        }
+                        if (GetDocument(tab) is IAsyncDocument document)
+                        {
+                            await document.CloseAsync(force: true);
+                        }
+                    }
+                }
+                break;
+        }
+    }
+
+    private void OnTabControlLoaded(object sender, RoutedEventArgs e)
+    {
+        Debug.Assert(Equals(sender, ActualTarget));
+        if (sender is FrameworkElement fe)
+        {
+            fe.Loaded -= OnTabControlLoaded;
+        }
+        Initialize();
+    }
+
+    private void OnTabControlSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isActiveDocumentChanging)
+        {
+            return;
+        }
+        TabControl tabControl = (TabControl)sender;
+        if (ActualTarget == tabControl)
+        {
+            _isActiveDocumentChanging = true;
+            try
+            {
+                ActiveDocument = (tabControl.SelectedItem is TabItem tabItem) ? (IAsyncDocument)GetDocument(tabItem) : null;
+            }
+            finally
+            {
+                _isActiveDocumentChanging = false;
+            }
+        }
+    }
+
+    private void OnTargetChanged(TabControl? oldValue)
+    {
+        Debug.Assert(oldValue == null);
+        Initialize();
+    }
+
+    #endregion
+
+    #region Methods
+
+    public IAsyncDocument CreateDocument(string? documentType, object? viewModel, object? parameter, object? parentViewModel)
+    {
+        ArgumentNullException.ThrowIfNull(ActualTarget);
+
+        object? view;
+        if (documentType == null && ViewTemplate == null && ViewTemplateSelector == null)
+        {
+            view = GetUnresolvedViewType() ?? (ViewLocator ?? UI.ViewLocator.Default).ResolveView(documentType);
+            ViewHelper.InitializeView(view, viewModel, parameter, parentViewModel);
+        }
+        else
+        {
+            view = CreateAndInitializeView(documentType, viewModel, parameter, parentViewModel);
+        }
+        var tab = new TabItem
+        {
+            Header = "Item",
+            Content = view,
+        };
+        ActualTarget?.Items.Add(tab);
+        var document = new TabbedDocument(this, tab, documentType) { ContinueOnCapturedContext = true };
+        return document;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_documents.Count == 0)
+            {
+                return;
+            }
+            await Task.WhenAll(_documents.ToList().Select(x => x.CloseAsync().AsTask()));
+            if (_documents.Count == 0)
+            {
+                return;
+            }
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void OnDocumentsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+            {
+                if (_documents.Count == 0)
+                {
+                    tcs.TrySetResult(true);
+                }
+            }
+
+            _documents.CollectionChanged += OnDocumentsCollectionChanged;
+            try
+            {
+                if (_documents.Count == 0)
+                {
+                    tcs.TrySetResult(true);
+                }
+                await tcs.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                _documents.CollectionChanged -= OnDocumentsCollectionChanged;
+            }
+        }
+        finally
+        {
+            (_documents as INotifyPropertyChanged).PropertyChanged -= OnDocumentsPropertyChanged;
+        }
+    }
+
+    private object? GetUnresolvedViewType()
+    {
+        return UnresolvedViewType == null ? null : Activator.CreateInstance(UnresolvedViewType);
+    }
+
+    private void Initialize()
+    {
+        _isInitialized = true;
+        Disposable.DisposeAndNull(ref _subscription);
+        _subscription = SubscribeTabControl(ActualTarget);
+    }
+
+    protected override void OnAttached()
+    {
+        base.OnAttached();
+        Debug.Assert(_subscription == null);
+        if (!_isInitialized)
+        {
+            if (AssociatedObject.IsLoaded)
+            {
+                Initialize();
+            }
+            else
+            {
+                AssociatedObject.Loaded += OnTabControlLoaded;
+            }
+        }
+    }
+
+    protected override void OnDetaching()
+    {
+        _isInitialized = false;
+        AssociatedObject.Loaded -= OnTabControlLoaded;
+        Debug.Assert(_subscription != null);
+        Disposable.DisposeAndNull(ref _subscription);
+        base.OnDetaching();
+    }
+
+    private Lifetime? SubscribeTabControl(TabControl? tabControl)
+    {
+        if (tabControl == null)
+        {
+            return null;
+        }
+        if (tabControl.ItemsSource != null)
+        {
+            Throw.InvalidOperationException("Can't use not null ItemsSource in this service.");
+        }
+        var lifetime = new Lifetime();
+        if (tabControl.Items is INotifyCollectionChanged collection)
+        {
+            lifetime.AddBracket(() => collection.CollectionChanged += OnTabControlItemsCollectionChanged,
+                () => collection.CollectionChanged -= OnTabControlItemsCollectionChanged);
+        }
+        lifetime.AddBracket(() => tabControl.SelectionChanged += OnTabControlSelectionChanged,
+            () => tabControl.SelectionChanged -= OnTabControlSelectionChanged);
+        return lifetime;
+    }
+
+    #endregion
+}
+
+internal static partial class EventArgsCache
+{
+    internal static readonly PropertyChangedEventArgs TitlePropertyChanged = new(nameof(IAsyncDocument.Title));
 }

@@ -5,119 +5,118 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace DevExpress.Mvvm.UI
+namespace DevExpress.Mvvm.UI;
+
+[TargetType(typeof(ListBox))]
+public class ListBoxSelectionBehavior : Behavior<ListBox>
 {
-    [TargetType(typeof(ListBox))]
-    public class ListBoxSelectionBehavior : Behavior<ListBox>
+    public static readonly DependencyProperty SelectedItemsProperty = DependencyProperty.Register(nameof(SelectedItems), typeof(IList), typeof(ListBoxSelectionBehavior), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnSelectedItemsChanged));
+
+    private bool _invokedByView;
+    private bool _invokedByModel;
+
+    #region Properties
+
+    public IList? SelectedItems
     {
-        public static readonly DependencyProperty SelectedItemsProperty = DependencyProperty.Register(nameof(SelectedItems), typeof(IList), typeof(ListBoxSelectionBehavior), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnSelectedItemsChanged));
+        get => (IList)GetValue(SelectedItemsProperty);
+        set => SetValue(SelectedItemsProperty, value);
+    }
 
-        private bool _invokedByView;
-        private bool _invokedByModel;
+    #endregion
 
-        #region Properties
+    #region Event Handlers
 
-        public IList? SelectedItems
+    private void OnListBoxSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        Debug.Assert(_invokedByView == false);
+        if (_invokedByModel)
         {
-            get => (IList)GetValue(SelectedItemsProperty);
-            set => SetValue(SelectedItemsProperty, value);
+            return;
         }
-
-        #endregion
-
-        #region Event Handlers
-
-        private void OnListBoxSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        if (AssociatedObject == null)
         {
-            Debug.Assert(_invokedByView == false);
-            if (_invokedByModel)
-            {
-                return;
-            }
-            if (AssociatedObject == null)
-            {
-                return;
-            }
-            _invokedByView = true;
-            try
-            {
-                SelectedItems = AssociatedObject.SelectedItems?.Cast<object>().ToArray();
-            }
-            catch (Exception ex)
-            {
-                Debug.Assert(false, ex.Message);
-            }
-            finally
-            {
-                _invokedByView = false;
-            }
+            return;
         }
-
-        private void OnListBoxItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        _invokedByView = true;
+        try
         {
+            SelectedItems = AssociatedObject.SelectedItems?.Cast<object>().ToArray();
         }
-
-        private static void OnSelectedItemsChanged(DependencyObject sender, DependencyPropertyChangedEventArgs e)
+        catch (Exception ex)
         {
-            var behavior = (ListBoxSelectionBehavior)sender;
-            behavior.SelectItemsInView((IList)e.NewValue);
+            Debug.Assert(false, ex.Message);
         }
-
-        #endregion
-
-        #region Methods
-
-        protected override void OnAttached()
+        finally
         {
-            base.OnAttached();
-            AssociatedObject.SelectionChanged += OnListBoxSelectionChanged;
-            ((INotifyCollectionChanged)AssociatedObject.Items).CollectionChanged += OnListBoxItemsCollectionChanged;
+            _invokedByView = false;
         }
+    }
 
-        protected override void OnDetaching()
+    private void OnListBoxItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+    }
+
+    private static void OnSelectedItemsChanged(DependencyObject sender, DependencyPropertyChangedEventArgs e)
+    {
+        var behavior = (ListBoxSelectionBehavior)sender;
+        behavior.SelectItemsInView((IList)e.NewValue);
+    }
+
+    #endregion
+
+    #region Methods
+
+    protected override void OnAttached()
+    {
+        base.OnAttached();
+        AssociatedObject.SelectionChanged += OnListBoxSelectionChanged;
+        ((INotifyCollectionChanged)AssociatedObject.Items).CollectionChanged += OnListBoxItemsCollectionChanged;
+    }
+
+    protected override void OnDetaching()
+    {
+        if (AssociatedObject is not null)
         {
-            if (AssociatedObject is not null)
-            {
-                AssociatedObject.SelectionChanged -= OnListBoxSelectionChanged;
-                ((INotifyCollectionChanged)AssociatedObject.Items).CollectionChanged -= OnListBoxItemsCollectionChanged;
-            }
-            base.OnDetaching();
+            AssociatedObject.SelectionChanged -= OnListBoxSelectionChanged;
+            ((INotifyCollectionChanged)AssociatedObject.Items).CollectionChanged -= OnListBoxItemsCollectionChanged;
         }
+        base.OnDetaching();
+    }
 
-        private void SelectItemsInView(IList? items)
+    private void SelectItemsInView(IList? items)
+    {
+        Debug.Assert(_invokedByModel == false);
+        if (_invokedByView)
         {
-            Debug.Assert(_invokedByModel == false);
-            if (_invokedByView)
+            return;
+        }
+        if (AssociatedObject is not { SelectionMode: SelectionMode.Extended })
+        {
+            return;
+        }
+        _invokedByModel = true;
+        try
+        {
+            var list = AssociatedObject.SelectedItems;
+            list.Clear();
+            if (items?.Count > 0)
             {
-                return;
-            }
-            if (AssociatedObject is not { SelectionMode: SelectionMode.Extended })
-            {
-                return;
-            }
-            _invokedByModel = true;
-            try
-            {
-                var list = AssociatedObject.SelectedItems;
-                list.Clear();
-                if (items?.Count > 0)
+                foreach (var item in items)
                 {
-                    foreach (var item in items)
-                    {
-                        list.Add(item);
-                    }
+                    list.Add(item);
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.Assert(false, ex.Message);
-            }
-            finally
-            {
-                _invokedByModel = false;
-            }
         }
-
-        #endregion
+        catch (Exception ex)
+        {
+            Debug.Assert(false, ex.Message);
+        }
+        finally
+        {
+            _invokedByModel = false;
+        }
     }
+
+    #endregion
 }

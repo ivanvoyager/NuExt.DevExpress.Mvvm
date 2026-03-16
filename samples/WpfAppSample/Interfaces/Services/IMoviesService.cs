@@ -1,16 +1,15 @@
 ﻿using MovieWpfApp.Models;
 
-namespace MovieWpfApp.Interfaces.Services
+namespace MovieWpfApp.Interfaces.Services;
+
+public interface IMoviesService
 {
-    public interface IMoviesService
-    {
-        List<PersonModel> Persons { get; }
+    List<PersonModel> Persons { get; }
 
-        ValueTask<bool> AddAsync(MovieModelBase model, CancellationToken cancellationToken);
-        ValueTask<bool> DeleteAsync(MovieModelBase model, CancellationToken cancellationToken);
-        ValueTask<List<MovieModelBase>> GetMoviesAsync(CancellationToken cancellationToken);
-        ValueTask InitializeAsync(CancellationToken cancellationToken);
-        ValueTask<bool> SaveAsync(MovieModelBase original, MovieModelBase clone, CancellationToken cancellationToken);
+    ValueTask<bool> AddAsync(MovieModelBase model, CancellationToken cancellationToken);
+    ValueTask<bool> DeleteAsync(MovieModelBase model, CancellationToken cancellationToken);
+    ValueTask<List<MovieModelBase>> GetMoviesAsync(CancellationToken cancellationToken);
+    ValueTask InitializeAsync(CancellationToken cancellationToken);
+    ValueTask<bool> SaveAsync(MovieModelBase original, MovieModelBase clone, CancellationToken cancellationToken);
 
-    }
 }

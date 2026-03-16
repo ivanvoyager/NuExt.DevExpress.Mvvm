@@ -1,102 +1,101 @@
 ﻿using System.Diagnostics;
 
-namespace DevExpress.Mvvm.UI
+namespace DevExpress.Mvvm.UI;
+
+/// <summary>
+/// Provides services for managing open window view models within the application.
+/// This service maintains a list of currently open window view models and offers functionality to register,
+/// unregister, and force-close all registered windows asynchronously. It ensures thread safety using an asynchronous lock.
+/// </summary>
+public sealed class OpenWindowsService : ServiceBase, IOpenWindowsService
 {
+    private readonly List<IWindowViewModel> _viewModels = [];
+    private readonly AsyncLock _lock = new();
+    private bool _disposing;
+
     /// <summary>
-    /// Provides services for managing open window view models within the application.
-    /// This service maintains a list of currently open window view models and offers functionality to register,
-    /// unregister, and force-close all registered windows asynchronously. It ensures thread safety using an asynchronous lock.
+    /// Gets open window view models.
     /// </summary>
-    public sealed class OpenWindowsService : ServiceBase, IOpenWindowsService
+    IEnumerable<IWindowViewModel> IOpenWindowsService.ViewModels => _viewModels;
+
+    /// <summary>
+    /// Asynchronously disposes the service, force-closing all registered windows.
+    /// </summary>
+    /// <returns>A ValueTask representing the asynchronous operation.</returns>
+    public async ValueTask DisposeAsync()
     {
-        private readonly List<IWindowViewModel> _viewModels = [];
-        private readonly AsyncLock _lock = new();
-        private bool _disposing;
-
-        /// <summary>
-        /// Gets open window view models.
-        /// </summary>
-        IEnumerable<IWindowViewModel> IOpenWindowsService.ViewModels => _viewModels;
-
-        /// <summary>
-        /// Asynchronously disposes the service, force-closing all registered windows.
-        /// </summary>
-        /// <returns>A ValueTask representing the asynchronous operation.</returns>
-        public async ValueTask DisposeAsync()
+        if (_lock.IsDisposed)
         {
-            if (_lock.IsDisposed)
-            {
-                return;
-            }
-            _disposing = true;
-            await _lock.EnterAsync();
-            try
-            {
-                List<Exception>? exceptions = null;
-                for (int i = _viewModels.Count - 1; i >= 0; i--)
-                {
-                    try
-                    {
-                        await _viewModels[i].CloseForcedAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        exceptions ??= [];
-                        exceptions.Add(ex);
-                    }
-                }
-                if (exceptions is not null)
-                {
-                    throw new AggregateException(exceptions);
-                }
-                //Debug.Assert(_viewModels.Count == 0);
-                _viewModels.Clear();
-            }
-            finally
-            {
-                _lock.Exit();
-                _disposing = false;
-            }
-            _lock.Dispose();
+            return;
         }
-
-        /// <summary>
-        /// Registers a window view model with the service.
-        /// </summary>
-        /// <param name="viewModel">The window view model to register.</param>
-        public void Register(IWindowViewModel viewModel)
+        _disposing = true;
+        await _lock.EnterAsync();
+        try
         {
-            _lock.Enter();
-            try
+            List<Exception>? exceptions = null;
+            for (int i = _viewModels.Count - 1; i >= 0; i--)
             {
-                _viewModels.Add(viewModel);
+                try
+                {
+                    await _viewModels[i].CloseForcedAsync();
+                }
+                catch (Exception ex)
+                {
+                    exceptions ??= [];
+                    exceptions.Add(ex);
+                }
             }
-            finally
+            if (exceptions is not null)
             {
-                _lock.Exit();
+                throw new AggregateException(exceptions);
             }
+            //Debug.Assert(_viewModels.Count == 0);
+            _viewModels.Clear();
         }
-
-        /// <summary>
-        /// Unregisters a window view model from the service.
-        /// </summary>
-        /// <param name="viewModel">The window view model to unregister.</param>
-        public void Unregister(IWindowViewModel viewModel)
+        finally
         {
-            if (_disposing || _lock.IsDisposed)
-            {
-                return;
-            }
-            _lock.Enter();
-            try
-            {
-                bool flag = _viewModels.Remove(viewModel);
-                Debug.Assert(flag);
-            }
-            finally
-            {
-                _lock.Exit();
-            }
+            _lock.Exit();
+            _disposing = false;
+        }
+        _lock.Dispose();
+    }
+
+    /// <summary>
+    /// Registers a window view model with the service.
+    /// </summary>
+    /// <param name="viewModel">The window view model to register.</param>
+    public void Register(IWindowViewModel viewModel)
+    {
+        _lock.Enter();
+        try
+        {
+            _viewModels.Add(viewModel);
+        }
+        finally
+        {
+            _lock.Exit();
+        }
+    }
+
+    /// <summary>
+    /// Unregisters a window view model from the service.
+    /// </summary>
+    /// <param name="viewModel">The window view model to unregister.</param>
+    public void Unregister(IWindowViewModel viewModel)
+    {
+        if (_disposing || _lock.IsDisposed)
+        {
+            return;
+        }
+        _lock.Enter();
+        try
+        {
+            bool flag = _viewModels.Remove(viewModel);
+            Debug.Assert(flag);
+        }
+        finally
+        {
+            _lock.Exit();
         }
     }
 }
