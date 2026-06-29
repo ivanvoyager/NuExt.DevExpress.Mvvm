@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+  </Folder>
   <Project Path="samples/WpfAppSample/MovieWpfApp.csproj" />
   <Project Path="src/NuExt.DevExpress.Mvvm.csproj" />
   <Project Path="tests/NuExt.DevExpress.Mvvm.Tests.csproj" />

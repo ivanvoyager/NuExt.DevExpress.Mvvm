@@ -1,10 +1,12 @@
-﻿using DevExpress.Mvvm.UI.Interactivity;
-using System.Collections;
+﻿using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using DevExpress.Mvvm.UI.Interactivity;
+using Presentation.Wpf;
+using Presentation.Wpf.Controls;
 
 namespace DevExpress.Mvvm.UI;
 

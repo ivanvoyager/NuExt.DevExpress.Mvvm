@@ -1,7 +1,8 @@
-﻿using DevExpress.Mvvm.UI.Interactivity;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using DevExpress.Mvvm.UI.Interactivity;
+using Presentation.Wpf.Controls;
 
 namespace DevExpress.Mvvm.UI;
 

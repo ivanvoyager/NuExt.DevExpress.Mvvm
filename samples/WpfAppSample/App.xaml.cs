@@ -1,4 +1,10 @@
-﻿using DevExpress.Mvvm;
+﻿using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Threading;
+using DevExpress.Mvvm;
 using DevExpress.Mvvm.UI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -7,12 +13,8 @@ using MovieWpfApp.Services;
 using MovieWpfApp.ViewModels;
 using NLog;
 using NLog.Extensions.Logging;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Windows;
-using System.Windows.Threading;
+using Presentation.Wpf;
+using Presentation.Wpf.Diagnostics;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 

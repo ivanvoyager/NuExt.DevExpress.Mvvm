@@ -13,5 +13,3 @@ using System.Windows.Markup;
 [assembly: XmlnsPrefix("http://schemas.devexpress.com/winfx/2008/xaml/mvvm", "dxmvvm")]
 [assembly: XmlnsDefinition("http://schemas.devexpress.com/winfx/2008/xaml/mvvm", "DevExpress.Mvvm")]
 [assembly: XmlnsDefinition("http://schemas.devexpress.com/winfx/2008/xaml/mvvm", "DevExpress.Mvvm.UI")]
-[assembly: XmlnsDefinition("http://schemas.microsoft.com/winfx/2006/xaml/presentation", "System.Windows")]
-[assembly: XmlnsDefinition("http://schemas.microsoft.com/winfx/2006/xaml/presentation", "System.Windows.Controls")]
